@@ -1,14 +1,22 @@
-FROM eclipse-temurin:21.0.2_13-jdk-jammy
+# Hardened Dockerfile
 
-ENV SPRING_PROFILES_ACTIVE=prod
-ENV PAYMENT_GATEWAY_API_KEY=sk_live_K6zXc2fAPgicxSnrkD207Hudb0Ae
+FROM eclipse-temurin:21-jre-alpine
 
-RUN apt-get update && apt-get install -y openssh-server sudo curl net-tools
+# Create non-root user
+RUN addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
-COPY . .
-COPY target/novabank-transfer.jar app.jar
-RUN chmod -R 777 /app
 
-EXPOSE 8082 22
-CMD ["java", "-jar", "app.jar"]
+# Copy application and give ownership to app user
+COPY --chown=app:app target/novabank-transfer.jar app.jar
+
+# Run as non-root user
+USER app
+
+EXPOSE 8082
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD wget -qO- http://localhost:8082/actuator/health || exit 1
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
